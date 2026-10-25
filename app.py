@@ -6,7 +6,7 @@ from src.advisor import get_advice
 st.set_page_config(page_title="AI Weather Advisor", page_icon="🌦️", layout="centered")
 
 st.title("🌦️ AI Weather Advisor")
-st.caption("Live weather + RAG knowledge base = practical, context-aware advice")
+
 
 
 @st.cache_data(ttl=600, show_spinner=False)
