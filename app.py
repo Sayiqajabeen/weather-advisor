@@ -2,11 +2,83 @@ import streamlit as st
 
 from src.weather import get_weather
 from src.advisor import get_advice
+from src.storage import (
+    init_db,
+    create_user,
+    verify_user,
+    load_messages,
+    save_message,
+    clear_messages,
+)
 
 st.set_page_config(page_title="AI Weather Advisor", page_icon="🌦️", layout="centered")
 
-st.title("🌦️ AI Weather Advisor")
+init_db()  # creates the tables on first run
 
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+
+def log_in(username: str):
+    st.session_state.user = username.strip().lower()
+    st.session_state.messages = load_messages(st.session_state.user)
+
+
+def log_out():
+    st.session_state.user = None
+    st.session_state.messages = []
+
+
+# ---------- Login / Sign-up screen ----------
+if st.session_state.user is None:
+    st.title("🌦️ AI Weather Advisor")
+    st.caption("Log in to save your chat history.")
+
+    login_tab, signup_tab = st.tabs(["Log in", "Sign up"])
+
+    with login_tab:
+        with st.form("login_form"):
+            login_user = st.text_input("Username")
+            login_pass = st.text_input("Password", type="password")
+            login_submit = st.form_submit_button("Log in")
+        if login_submit:
+            if verify_user(login_user, login_pass):
+                log_in(login_user)
+                st.rerun()
+            else:
+                st.error("Incorrect username or password.")
+
+    with signup_tab:
+        with st.form("signup_form"):
+            new_user = st.text_input(
+                "Choose a username", help="3 to 20 characters: letters, numbers, underscore"
+            )
+            new_pass = st.text_input(
+                "Choose a password", type="password", help="At least 8 characters"
+            )
+            new_pass2 = st.text_input("Confirm password", type="password")
+            signup_submit = st.form_submit_button("Create account")
+        if signup_submit:
+            if new_pass != new_pass2:
+                st.error("Passwords do not match.")
+            else:
+                try:
+                    create_user(new_user, new_pass)
+                    log_in(new_user)
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
+    st.caption("Tip: do not reuse an important password from another website.")
+    st.stop()  # nothing below runs until the user is logged in
+
+# ---------- Main app (logged in) ----------
+user = st.session_state.user
+
+st.title("🌦️ AI Weather Advisor")
+st.caption("Live weather + RAG knowledge base = practical, context-aware advice")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -19,6 +91,12 @@ def cached_weather(city: str) -> dict:
 clicked_example = None
 
 with st.sidebar:
+    st.write(f"Logged in as **{user}**")
+    if st.button("Log out"):
+        log_out()
+        st.rerun()
+
+    st.markdown("---")
     st.header("Location")
     city = st.text_input("Enter city", value="Lahore").strip()
 
@@ -37,6 +115,7 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("Clear chat"):
+        clear_messages(user)
         st.session_state.messages = []
         st.rerun()
 
@@ -63,18 +142,14 @@ c4.metric("Rain (1h)", f"{w['rain_1h']} mm")
 st.markdown("---")
 
 # ---------- Chat ----------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Show previous messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 
 def handle_question(question: str):
-    st.session_state.messages.append({"role": "user", "content": question})
-    history = st.session_state.messages[:-1]  # earlier chat, without the current question
+    history = list(st.session_state.messages)  # earlier chat, without the current question
+
     with st.chat_message("user"):
         st.markdown(question)
 
@@ -82,14 +157,19 @@ def handle_question(question: str):
         with st.spinner("Checking weather and guidelines..."):
             try:
                 result = get_advice(city, question, weather=w, history=history)
-                answer = result["answer"]
+                answer, ok = result["answer"], True
             except ValueError as e:
-                answer = str(e)
+                answer, ok = str(e), False
             except Exception as e:
-                answer = f"Sorry, something went wrong: {e}"
+                answer, ok = f"Sorry, something went wrong: {e}", False
         st.markdown(answer)
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    # Only successful answers are remembered and saved (errors are not)
+    if ok:
+        st.session_state.messages.append({"role": "user", "content": question})
+        st.session_state.messages.append({"role": "assistant", "content": answer})
+        save_message(user, "user", question)
+        save_message(user, "assistant", answer)
 
 
 question = st.chat_input("Ask a weather question...")

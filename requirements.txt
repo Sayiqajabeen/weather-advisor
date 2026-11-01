@@ -9,4 +9,5 @@ langchain-text-splitters
 langchain-groq
 langchain-huggingface
 sentence-transformers
-faiss-cpu
+faiss-cpu 
+psycopg[binary]
