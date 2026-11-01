@@ -70,29 +70,26 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        if msg.get("sources"):
-            st.caption("Sources: " + ", ".join(msg["sources"]))
 
 
 def handle_question(question: str):
     st.session_state.messages.append({"role": "user", "content": question})
+    history = st.session_state.messages[:-1]  # earlier chat, without the current question
     with st.chat_message("user"):
         st.markdown(question)
 
     with st.chat_message("assistant"):
         with st.spinner("Checking weather and guidelines..."):
             try:
-                result = get_advice(city, question, weather=w)
-                answer, sources = result["answer"], result["sources"]
+                result = get_advice(city, question, weather=w, history=history)
+                answer = result["answer"]
+            except ValueError as e:
+                answer = str(e)
             except Exception as e:
-                answer, sources = f"Sorry, something went wrong: {e}", []
+                answer = f"Sorry, something went wrong: {e}"
         st.markdown(answer)
-        if sources:
-            st.caption("Sources: " + ", ".join(sources))
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": sources}
-    )
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
 question = st.chat_input("Ask a weather question...")
