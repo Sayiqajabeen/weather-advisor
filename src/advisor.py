@@ -7,7 +7,7 @@ from src.config import GROQ_API_KEY, GROQ_MODEL
 from src.weather import get_weather, format_weather, get_forecast, format_forecast
 from src.retriever import retrieve_relevant, format_context
 
-MAX_HISTORY = 8        # how many previous messages (user + assistant) the LLM can see
+MAX_HISTORY = 20      # how many previous messages (user + assistant) the LLM can see
 FORECAST_TTL = 600     # cache a city's forecast for 10 minutes
 
 SYSTEM_PROMPT = """You are a helpful Weather Advisor assistant.
